@@ -15,6 +15,56 @@ const { vec2, vec3, vec4, quat, mat3, mat4 } = require("gl-matrix");
 
 const osc = require("osc");
 
+const openvr = require("./../node_vr/index.js")
+
+let trackingstate = {
+	hmd: { pos: vec3.create(), quat: quat.create() },
+	trackers: [
+	  { pos: vec3.create(), quat: quat.create() },
+	  { pos: vec3.create(), quat: quat.create() },
+	]
+  }
+  
+  const tmpmat = mat4.create();
+  
+  
+  try {
+	openvr.init(0);
+  } catch(e) {
+	throw openvr.EVRInitError[e];
+  }
+  function getTrackingData() {
+	//openvr.update();
+  
+   // let res = openvr.waitGetPoses();
+	// if (res) {
+	//   console.log(res)
+	// }
+	let trackerCount = 0;
+	for (let i=0; i<8; i++) {
+	  let devclass = openvr.getTrackedDeviceClass(i)
+  
+	  if (openvr.ETrackedDeviceClass[devclass] == "TrackedDeviceClass_GenericTracker") {
+		let out = trackingstate.trackers[trackerCount]
+  
+		openvr.getLastPoseForTrackedDeviceIndex(i, tmpmat)
+		mat4.getTranslation(out.pos, tmpmat)
+		mat4.getRotation(out.quat, tmpmat);
+  
+		trackerCount++;
+	  } else if (openvr.ETrackedDeviceClass[devclass] == "TrackedDeviceClass_HMD") {
+		let out = trackingstate.hmd
+		openvr.getLastPoseForTrackedDeviceIndex(i, tmpmat)
+		mat4.getTranslation(out.pos, tmpmat)
+		mat4.getRotation(out.quat, tmpmat)
+	  }
+  
+	}
+  
+	//console.log(state)
+	return trackingstate;
+  }
+
 const project_path = process.cwd();
 const server_path = __dirname;
 const client_path = path.join(server_path, "client");
@@ -43,6 +93,18 @@ function send_all_clients(msg, ignore) {
 	});
 }
 
+// Haptics
+let bodyHaptics;
+let udpPort = new osc.UDPPort({
+		// This is where Clyde is listening on
+		//localAddress: "192.168.137.70",//"192.168.137.210",//"192.168.0.10",//"192.168.1.146",//
+		//localPort: 8080, //9999
+
+		// This is where pi is listening for OSC messages.
+		//remoteAddress: "192.168.137.125",//"192.168.137.108",//"192.168.0.14", //"192.168.1.117",//
+		//remotePort: 3030,
+		//metadata: true
+});
 
 // whenever a client connects to this websocket:
 let sessionId = 0;
@@ -89,7 +151,86 @@ wss.on('connection', function(ws, req) {
 
 				//ws.send(JSON.stringify({ cmd:"newData", state: manus.state }))
 
-				//ws.send(JSON.stringify({ cmd: "trackingData", state:getTrackingData() }))
+				ws.send(JSON.stringify({ cmd: "trackingData", state:getTrackingData() }))
+			
+			} else if (msg == "sendHaptics") {
+				//var regEx = /(\/belt_(?<beltb>[1-6]){1}\/buzzer_(?<buzzer>[1-5]){1}\/((repititions)|(frequency)))|(\/belt_(?<beltp>[1-6]){1}\/pattern_(?<pattern>[1-4]){1}\/((repititions)|(frequency)))/
+				// Open the socket.
+				udpPort.open();
+	
+				function send(b,z,p,d) {
+	
+					bodyHaptics = {
+								address: `/belt_${b}/buzz_${z}/`,
+								args: [
+										{
+												type: "i",
+												value: p
+										},
+										{
+												type: "i",
+												value: d
+										}
+								]
+						};
+	
+						console.log("Sending message", bodyHaptics.address, bodyHaptics.args, "to", udpPort.options.remoteAddress + ":" + udpPort.options.remotePort);
+						udpPort.send(bodyHaptics);
+	
+				};
+	
+				for ( let i = 0; i < 8; i++ ){
+					let b = 1; //belt
+					let z = i; //buzzer
+					let p = 52; //pattern
+					let d = 0.5; //duration
+					
+					send(b,z,p,d);
+				};
+
+			} else if (msg == "sendHaptics_back") {
+
+					// Open the socket.
+					udpPort.open();
+					let loop = 0;	
+
+					do {
+						bodyHaptics = {
+									address: `/belt_1/buzz_3/`,
+									args: [
+											{
+													type: "i",
+													value: 44
+											},
+											{
+													type: "i",
+													value: 1
+											}
+									]
+							};
+		
+							console.log("Sending message", bodyHaptics.address, bodyHaptics.args, "to", udpPort.options.remoteAddress + ":" + udpPort.options.remotePort);
+							udpPort.send(bodyHaptics);
+					
+							bodyHaptics = {
+								address: `/belt_1/buzz_4/`,
+								args: [
+										{
+												type: "i",
+												value: 95
+										},
+										{
+												type: "i",
+												value: 1
+										}
+								]
+						};
+	
+						  console.log("Sending message", bodyHaptics.address, bodyHaptics.args, "to", udpPort.options.remoteAddress + ":" + udpPort.options.remotePort);
+						  udpPort.send(bodyHaptics);
+
+							loop++
+						} while (loop<1);
 			} else {
 				console.log("received message from client:", id, msg);
 			}
