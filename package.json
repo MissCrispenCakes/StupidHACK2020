@@ -1,0 +1,36 @@
+{
+  "name": "hack2020",
+  "version": "0.0.1",
+  "description": "Node.js bindings for stupid shit no one cares about",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MissCrispenCakes/StupidHACK2020.git"
+  },
+  "keywords": [
+    "VR",
+    "hackathon",
+    "mixed reality",
+    "hardware hack"
+  ],
+  "author": "MissCrispenCakes",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/MissCrispenCakes/StupidHACK2020/issues"
+  },
+  "homepage": "https://github.com/MissCrispenCakes/StupidHACK2020#readme",
+  "dependencies": {
+    "bindings": "^1.5.0",
+    "express": "^4.17.1",
+    "gl-matrix": "^3.1.0",
+    "openvr": "0.0.0",
+    "osc": "^2.4.0",
+    "stats.js": "^0.17.0",
+    "ws": "^7.1.2"
+  },
+  "gypfile": true
+}
