@@ -1,44 +1,5 @@
 
 
-//  // USEFUL QUATERNIONS //  // 
-// [w, x, y, z] = [cos(a/2), sin(a/2) * nx, sin(a/2)* ny, sin(a/2) * nz]
-// [x]       [y]       [z]       [w]      //** description */
-// [0]       [0]       [0]       [1]      //** identity */
-// [1]       [0]       [0]       [0]      //** 180 around X : pitch */
-// [0]       [1]       [0]       [0]      //** 180 around Y : yaw   */
-// [0]       [0]       [1]       [0]      //** 180 around Z : roll  */
-// [sq(.5)]  [0]       [0]       [sq(.5)] //** +90 around X : CW    */
-// [0]       [sq(.5)]  [0]       [sq(.5)] //** +90 around Y : CW    */
-// [0]       [0]       [sq(.5)]  [sq(.5)] //** +90 around Z : CW    */
-// [-sq(.5)] [0]       [0]       [sq(.5)] //** -90 around X : CCW   */
-// [0]       [-sq(.5)] [0]       [sq(.5)] //** -90 around Y : CCW   */
-// [0]       [0]       [-sq(.5)] [sq(.5)] //** -90 around Z : CCW   */
-
-
-// position [ x, y, z ] -> p = 0 + ix + jy + kz
-// orientation [ heading    q = cos(a/2) + ix sin(a/2)
-//                attitude               + jy sin(a/2)
-//                   bank ]              + kz sin(a/2)
-// rotation [ heading     q = cos(a/2) + ix sin(a/2)
-//             attitude                + jy sin(a/2)
-//                bank ]               + kz sin(a/2)
-// rotate point      4D ->  q * p * conj(q)
-// combine rotations 4D -> q1 * q2 
-//
-//  Pi -> vector before transform | Po -> vector after transform | q -> quaternion rep trans | conj() -> conjugate
-//
-// rotation ( around origin )               Po = q * Pi * conj( q )
-// reflection (in plane thorough origin )   Po = q * Pi * q
-// para component of plane                  Po = 1/2 ( Pi + q * Pi * q )
-// perp component of plane                  Po = 1/2 ( Pi -q * Pi * q )
-// scaling                                  Po = scalar * Pi (or comb w/rot or ref)
-// translation                              Po = q + Pi
-//
-//  local? !reverse -> q1 then q2 ? q1 * q2 -> global? reverse -> q2 * q1
-
-
-
-
 //  //************************************************************************************************// VARIABLES  //  //
 //  //************************************************************************************************//
 //  //************************************************************************************************//
@@ -53,17 +14,11 @@ let msgs = [];
 
 
 let container;
-let camera, scene, renderer, controls, user, L, R, LH, LR; 
-
-let tmp, ret;
-let dust;
-let paint = false;
+let camera, scene, renderer, controls; 
 
 let crosshair, 
     raycaster, 
     handRay, 
-    paintRayL,
-    paintRayR,
     intersected, 
     leftInter,
     rightInter,
@@ -71,36 +26,13 @@ let crosshair,
     intersectionsLeft = [],
     intersectionsRight = [];
 
-let tempMatrix = new THREE.Matrix4();
-let rotationMatrix = new THREE.Matrix4();
-let leftWristMatrix = new THREE.Matrix4();
-let rightWristMatrix = new THREE.Matrix4();
-let leftWristQuat = new THREE.Quaternion();
-let rightWristQuat = new THREE.Quaternion();
-
-let rot90 = new THREE.Quaternion();
-let rot180 = new THREE.Quaternion();
-let rotZ180 = new THREE.Quaternion();
-let rotY90 = new THREE.Quaternion();
-
-let tempQuaternion = new THREE.Quaternion();
-let targetRotation = new THREE.Quaternion();
-let fromHere = new THREE.Quaternion();
-let toThere = new THREE.Quaternion();
-
-let gloves, room, floor;
-let planeX, planeY, planeZ;
-let up, down, left, right;
+let line, room, floor;
 
 let leftHand,
     leftHandControl, 
     rightHand,
     rightHandControl;
 
-let leftWrist,
-    leftJoints = [],
-    rightWrist,
-    rightJoints = [];
 
 let geometries = [
   new THREE.ConeGeometry( 0.01, 0.05, 32 ), // [0] boids //0.01 0.02
@@ -169,42 +101,7 @@ let state = null;
 
 let sock;
 
-//** 3D BOIDS */
-let boids = new THREE.Group();
-//let Creature;
-let boundary = 7;
-let clock = new THREE.Clock();
-let flocks;
-let axis = new THREE.Vector3();
-let radians;
-let Creatures = [];
-let wind = new THREE.Vector3(0.05,0.0,0.0);
-let gravity = new THREE.Vector3(0.0,0.1,0);
 
-// VR STUFF
-let isInVR = false;
-let vrDisplay, frameData;
-let rightEye, leftEye;
-
-// STAR STUFF
-let starTexture = new THREE.TextureLoader().load( "sparkle_cut.png" );
-let stars = [];
-let starGroup = new THREE.Group();
-let lightness = 0;
-let rotSpeed = 0.01;
-
-
-//  //************************************************************************************************// UPDATE WORLD FUNCTIONS //  //
-//  //************************************************************************************************//
-//  //************************************************************************************************//
-
-function getRandom(Min, Max) {
-  let min = Min;
-  let max = Max;
-  let num = Math.floor(Math.random()*max) + min; // this will get a number between min and max;
-  num *= Math.floor(Math.random()*2) == 1 ? 1 : -1; // this will add minus sign in 50% of cases
-  return num;
-}
 
 //  //************************************************************************************************// FUNCTION CALLS  //  //
 //  //************************************************************************************************//
@@ -295,96 +192,7 @@ function connect_to_server( opt, log ) {
   
        } else if (obj.cmd == "trackingData") {
 
-      /*
-        ws received, {
-          "cmd":"trackingData","state":
-          {
-            "hmd":
-            {
-              "pos":{"0":-0.31410789489746094,"1":1.6376476287841797,"2":0.4556894302368164},
-              "quat":{"0":0.13929444551467896,"1":0.2569557726383209,"2":0.034140702337026596,"3":0.9557223320007324}
-            },
-            "trackers":
-            [{
-              "pos":{"0":0.9590294361114502,"1":1.911466121673584,"2":0.5492393970489502},
-              "quat":{"0":-0.1990630030632019,"1":0.6774951219558716,"2":0.6710811257362366,"3":0.22588586807250977}
-            },
-            {
-              "pos":{"0":1.086222529411316,"1":1.8866705894470215,"2":0.4619896411895752},
-              "quat":{"0":-0.6431819200515747,"1":-0.2571682035923004,"2":-0.28171005845069885,"3":0.6639434695243835}
-            }]
-          }
-         }
-      */
-          let lh = obj.state.trackers[0];
-          let rh = obj.state.trackers[1];
-
-         // log(lh.pos[1])
-
-          // leftWrist.position.fromArray(lh.pos);
-          // rightWrist.position.fromArray(rh.pos);
-
-          // // apply 90 rot 
-          // // [-/+sq(.5)]  [0]       [0]       [sq(.5)] //** -/+90 around X : CW    */
          
-          // //rot90.set(Math.sqrt(0.5), 0, 0, Math.sqrt(0.5) );
-          // rot90.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), -Math.PI / 2 );
-
-          // rotZ180.set( 0, 0, 1, 0 );
-          // //rotZ180.setFromAxisAngle( new THREE.Vector3( 0, 0, 1 ), Math.PI );
-
-          // rot180.set( 1, 0, 0, 0 );
-          // //rot180.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), Math.PI );
-          
-          // leftWrist.quaternion.fromArray(lh.quat);
-          // rightWrist.quaternion.fromArray(rh.quat);
-          
-          // //leftWrist.quaternion.multiplyQuaternions(leftWrist.quaternion, rotZ180);
-          // leftWrist.quaternion.multiplyQuaternions(leftWrist.quaternion, rot90);
-
-          // rot180.set( 0, 1, 0, 0 );
-          // //rot90.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), -Math.PI/2 );
-
-          // //rightWrist.quaternion.multiplyQuaternions(rightWrist.quaternion, rot180);
-          // rightWrist.quaternion.multiplyQuaternions(rightWrist.quaternion, rot90);
-
-          // // // check interactions
-          // // leftHandControl = lh;
-          // // rightHandControl = rh;
-
-                  
-          // // //  ** add controllers | hands | trackers */
-          // // leftHandControl = renderer.vr.getController( 0 );
-          // // leftHandControl.addEventListener( 'selectstart', onSelectStart );
-          // // leftHandControl.addEventListener( 'selectend', onSelectEnd );
-          // // //scene.add( leftHandControl );
-
-          // // rightHandControl = renderer.vr.getController( 1 );
-          // // rightHandControl.addEventListener( 'selectstart', onSelectStart );
-          // // rightHandControl.addEventListener( 'selectend', onSelectEnd );
-          // // //scene.add( rightHandControl );
-
-          // // let line = new THREE.Line( geometries[8], materials[3] );
-          // // //line.name = 'handRay';
-          // // line.scale.z = 1;
-
-          // // leftHandControl.add( line.clone() ); // leftWrist
-          // // leftHandControl.name = 'leftHandRay';
-          // // rightHandControl.add( line.clone() ); // rightWrist
-          // // rightHandControl.name = 'rightHandRay';
-
-          // //leftWrist.quaternion.multiplyQuaternions(leftWrist.quaternion, rot180);
-          // //rightWrist.quaternion.multiplyQuaternions(rightWrist.quaternion, rot180);
-
-          // // [0]       [0]      [1]       [0]      //** 180 around Z : roll  */
-          // // rot180.set( 1, 0, 0, 0 );
-          // // rot180.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), Math.PI );
-
-
-
-          // // rotY90.set( 0, Math.sqrt(0.5), 0, Math.sqrt(0.5) );
-          // // rotY90.setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), Math.PI / 2 );
-          
 				} else {
           
           log( "ws received", msg );
@@ -434,9 +242,6 @@ function connect_to_server( opt, log ) {
 }
 
 
-//  //*********************************** // CONNECT_TO_HAPTICS // *************************************//
-
-
 //  //************************************************************************************************// INITIALIZATION  //  //  
 //  //************************************************************************************************//
 //  //************************************************************************************************//
@@ -460,89 +265,10 @@ function initialize() {
   scene.background = new THREE.Color( 0x808080 );
   //scene.fog	= new THREE.FogExp2( 0xdde0f0, 0.0025 );
   
-  for (let i = 0; i < 300; i++) {
-    let geometry = new THREE.SphereGeometry( 0.05, 8, 6 );
-    let material = new THREE.MeshBasicMaterial( { map: starTexture } );
-    let star = new THREE.Mesh( geometry, material );
-    // let y = getRandom();
-    // y *= y;
-    // y = Math.sqrt( y );
-    star.position.set( getRandom(0.1,10), getRandom(0.1,10), getRandom(0.1,10) );
-
-    star.material.side = THREE.DoubleSide;
-    stars.push( star );
-  }
-
-  for (let i = 0; i < 100; i++) { //100
-    let geometry = new THREE.SphereGeometry( 0.2, 8, 6 );
-    let material = new THREE.MeshBasicMaterial( { map: starTexture } );
-    let star = new THREE.Mesh( geometry, material );
-    // let y = getRandom();
-    // y *= y;
-    // y = Math.sqrt( y );
-    star.position.set( getRandom(0.1,13), getRandom(0.1,13), getRandom(0.1,13) );
-
-    star.material.side = THREE.DoubleSide;
-    stars.push( star );
-  }
-  
-  for (let i = 0; i < 25; i++) { //25
-    let geometry = new THREE.SphereGeometry( 0.7, 8, 6 );
-    let material = new THREE.MeshBasicMaterial( { map: starTexture } );
-    let star = new THREE.Mesh( geometry, material );
-    // let y = getRandom();
-    // y *= y;
-    // y = Math.sqrt( y );
-    star.position.set( getRandom(0.1,15), getRandom(0.1,15), getRandom(0.1,15) );
-    
-    star.material.side = THREE.DoubleSide;
-    stars.push( star );
-  }
-
-  for (let i = 0; i < 5; i++) { //5
-    let geometry = new THREE.SphereGeometry( 1, 8, 6 );
-    let material = new THREE.MeshBasicMaterial( { map: starTexture } );
-    let star = new THREE.Mesh( geometry, material );
-    // let y = getRandom();
-    // y *= y;
-    // y = Math.sqrt( y );
-    star.position.set( getRandom(0.1,15), getRandom(0.1,15), getRandom(0.1,15) );
-    
-    star.material.side = THREE.DoubleSide;
-    stars.push( star );
-  }
-
-  room = new THREE.Group();
-  scene.add( room );
-  tmp = stars.slice(stars);
-  ret = [];
-  for (let j = 0; j < stars.length; j++) {
-    let index = Math.floor(Math.random() * tmp.length);
-    let removed = tmp.splice(index, 1);
-    // Since we are only removing one element
-    ret.push(removed[0]);
-    ret[j].name = "s" + j;
-    starGroup.add( ret[j] );
-  }
-
-  scene.add(starGroup);
-  starGroup.name = "starGroup";
-
-  //gloves = new THREE.Group();
-  //scene.add( gloves );
-
-  
-  user = new THREE.Group();
-  user.name = "user"
-  scene.add( user ); //room
-
-  //gloves = new THREE.Group();
-  //scene.add( gloves );
-
   //** add camera */
   const fov = 75;
   const aspect = window.innerWidth / window.innerHeight; // 2;  // the canvas default
-  const near = 0.04; //0.1;
+  const near = 0.01; //0.1;
   const far = 20; //10 //50;
   camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
 
@@ -552,15 +278,7 @@ function initialize() {
   crosshair.position.z = - 1; //** keep crosshair slightly infront of you at all times */
   //user.add( camera );
   scene.add( camera );
-  //user.add( camera );
 
-  // controls = new THREE.OrbitControls(camera);
-  // camera.lookAt(0,  - .5, 0);
-
-  let vec = new THREE.Vector3( 0, 0, -1 );
- // vec.applyQuaternion( camera.quaternion );
- // crosshair.position.copy( vec );
-  
   //** add lighting */
   scene.add( new THREE.HemisphereLight( 0x808080, 0x606060 ) );
   scene.add( new THREE.AmbientLight( 0x404040 ) ); //** soft white light */
@@ -573,17 +291,6 @@ function initialize() {
   // light.shadow.camera.left = -6;
   // light.shadow.mapSize.set( 4096, 4096 );
   scene.add( light );
-
-
-  //** add room */
-  //room = new THREE.LineSegments( geometries[6], materials[4] );
-  room.name = "room"
-  
-  
-  room.position.set( 0, 0, 0 );
-  
-  
-  //scene.add( room );
   
   //** add floor */
   //floor = new THREE.Mesh( geometries[7], materials[5] );
@@ -592,7 +299,7 @@ function initialize() {
   floor.name = "floor"
   floor.receiveShadow = true;
   scene.add( new THREE.PointLight( 0xff0040, 2, 50 ) );
-  //scene.add(floor)
+  scene.add(floor)
   
   //** add ray | used for casting lines from head + controllers to objects | used for intersecting */
   raycaster = new THREE.Raycaster();
@@ -611,23 +318,6 @@ function initialize() {
   container.appendChild( renderer.domElement );
   document.body.appendChild( WEBVR.createButton( renderer ) );
   
-  //** wrist */
-  // leftWrist = new THREE.Mesh( geometries[1], materials[2] );
-  // rightWrist = new THREE.Mesh( geometries[1], materials[2] );
-  
-  // leftWrist.position.set( 0, 1.3, + 0.1 ); // 0, 1.5, 0
-  // rightWrist.position.set( 0, 1.3, - 0.1 ); // 0.5, 1.5, -1
-
-  // leftWrist.add( new THREE.AxesHelper( 0.05 ) );
-  // rightWrist.add( new THREE.AxesHelper( 0.05 ) );
-
-  // leftWrist.name = "leftWrist"
-  // rightWrist.name = "rightWrist"
-
-  // user.add( leftWrist );
-  // user.add( rightWrist );
-
-  //** add controllers | hands | trackers */
   leftHandControl = renderer.vr.getController( 0 );
   leftHandControl.addEventListener( 'selectstart', onSelectStart );
   leftHandControl.addEventListener( 'selectend', onSelectEnd );
@@ -653,10 +343,6 @@ function initialize() {
   // window.addEventListener( 'vrdisplaypointerrestricted', onPointerRestricted, false );
   // window.addEventListener( 'vrdisplaypointerunrestricted', onPointerUnrestricted, false );
   window.addEventListener( 'resize', onWindowResize, false );
-
-  // //** 3D BOIDS */
-  // flock = new THREE.Group();
-  // room.add(flock);
 
   try {
     sock = connect_to_server( {}, write );
@@ -833,20 +519,6 @@ function checkRoom() {
   } 
 }
 
-//  //************************************ // CREATURE // ******************************************//
-function buildCreature() {
-  this.findUser = function(bump) {
-    let d = this.position.distanceTo(bump.position);
-    if ((d > 0) && (d < 1)) {
-        try {
-          sock.send( "sendHaptics_back" );
-        } catch( e ) {
-          write( e )
-        }
-     }
-
-  }
-}
 
 //  //************************************************************************************************/ 
 //  //************************************************************************************************/  UPDATE VR WORLD  //  //
@@ -871,13 +543,20 @@ function render() {
   
   //controls.update();
 
-  try {
-    sock.send( "getData" );
-  } catch( e ) {
-    write( e )
-  }
+  // try {
+  //   sock.send( "getData" );
+  // } catch( e ) {
+  //   write( e )
+  // }
+
+  // try {
+  //   sock.send( "sendHaptics" );
+  // } catch( e ) {
+  //   write( e );
+  // }
 
   if ( !state ) return;
+
 
   //** manage intersections */
   cleanIntersected();
@@ -887,33 +566,7 @@ function render() {
   intersectHead();
   //checkRoom();
   
-  //scene.updateMatrixWorld();
 
-
-  for (let k = 0; k < ret.length; k++) {
-    let star = ret[k];
-    star.rotation.x += 0.01*k/100;
-    //star.rotation.y += 0.01/k;
-    star.rotation.z += 0.01*k/100;
-    lightness > 100 ? lightness = 0 : lightness+=0.4; //++
-    //let material = new THREE.MeshLambertMaterial( { color: new THREE.Color("hsl(" + H + ", 100%, 80%)" ), transparency: true, opacity: 0.4 } );
-    //   planeMaterial.color.setHSL(object.userData.H,object.userData.S,object.userData.L);
-    //star.material.color = new THREE.Color("hsl( 255, 100%, " + lightness + "%)");
-    star.material.color.setHSL(255, 100, lightness);
-  } 
-
-  let invertStage = new THREE.Matrix4()
-  let temp = new THREE.Matrix4();
-  let vrDisplay = renderer.vr.getDevice()
-  if (vrDisplay) {
-    temp.fromArray( vrDisplay.stageParameters.sittingToStandingTransform )
-    //invertStage.getInverse( temp, true );
-    //temp.getInverse( temp )
-    //console.log(temp)
-    //user.position.set(invertStage[12])
-    user.position.fromArray(temp.elements, 12)
-   // scene.position.fromArray(temp.elements, 12);
-  } 
 
   renderer.render( scene, camera );
 
